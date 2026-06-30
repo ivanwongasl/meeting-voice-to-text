@@ -10,6 +10,7 @@ A web MVP for real-time meeting voice-to-text transcription with a Next.js front
 - Start / stop transcription controls
 - Connection and transcription status indicators
 - Configurable speech-to-text provider integration
+- Optional offline PCM pipeline for local Whisper / Vosk backends
 
 ## Tech Stack
 
@@ -19,19 +20,23 @@ A web MVP for real-time meeting voice-to-text transcription with a Next.js front
 - Tailwind CSS
 - Node.js WebSocket server (`ws`)
 - Deepgram real-time transcription SDK
+- Optional Python offline backends for Faster-Whisper and Vosk
 
 ## Project Structure
 
 - `app/` - Next.js app pages and layout
 - `components/` - UI components
 - `lib/` - shared client utilities and types
+- `public/worklets/` - browser audio worklet for PCM capture
 - `server/` - Node.js WebSocket + transcription bridge server
+- `server_python/` - offline Python speech-to-text servers
 
 ## Prerequisites
 
 - Node.js 18+
 - npm 9+
-- A Deepgram API key
+- For online mode: a Deepgram API key
+- For offline mode: a local Whisper or Vosk backend
 
 ## Environment Variables
 
@@ -40,6 +45,35 @@ Create a `.env.local` file in the project root:
 ```bash
 DEEPGRAM_API_KEY=your_deepgram_api_key
 NEXT_PUBLIC_TRANSCRIPTION_WS_URL=ws://localhost:8080
+NEXT_PUBLIC_AUDIO_MODE=pcm
+```
+
+### `NEXT_PUBLIC_AUDIO_MODE`
+
+- `mediarecorder` - use browser `MediaRecorder` (good for the existing `/server` backend)
+- `pcm` - use Web Audio API PCM16 16k streaming (required for offline `server_python` backends)
+
+Examples:
+
+#### Existing online Node server
+
+```bash
+NEXT_PUBLIC_TRANSCRIPTION_WS_URL=ws://localhost:8080
+NEXT_PUBLIC_AUDIO_MODE=mediarecorder
+```
+
+#### Offline Whisper backend
+
+```bash
+NEXT_PUBLIC_TRANSCRIPTION_WS_URL=ws://localhost:8090
+NEXT_PUBLIC_AUDIO_MODE=pcm
+```
+
+#### Offline Vosk backend
+
+```bash
+NEXT_PUBLIC_TRANSCRIPTION_WS_URL=ws://localhost:8091
+NEXT_PUBLIC_AUDIO_MODE=pcm
 ```
 
 ## Install
@@ -56,45 +90,44 @@ Run the Next.js frontend:
 npm run dev
 ```
 
-In another terminal, run the WebSocket transcription server:
+Then choose one backend:
+
+### Option A: Existing online Node WebSocket server
 
 ```bash
 npm run server
 ```
 
+### Option B: Offline Whisper Python server
+
+See `server_python/serverWhisper/README.md`
+
+### Option C: Offline Vosk Python server
+
+See `server_python/serverVosk/README.md`
+
 Then open:
 
 - Frontend: `http://localhost:3000`
-- WebSocket server: `ws://localhost:8080`
 
-## How it works
+## Audio pipeline modes
 
-1. The browser requests microphone access.
-2. Audio is captured with `MediaRecorder` and chunked periodically.
-3. Audio chunks are sent to the Node.js WebSocket server.
-4. The server forwards audio to Deepgram's live transcription API.
-5. Transcript events are pushed back to the browser in real time.
-6. The UI renders interim and final transcript segments live.
+### MediaRecorder mode
+
+- Sends browser audio chunks such as `webm/opus`
+- Intended for the existing `/server` backend and cloud transcription integration
+
+### PCM mode
+
+- Captures microphone audio via Web Audio API
+- Downmixes to mono
+- Resamples to 16kHz
+- Converts to PCM16
+- Streams binary audio frames over WebSocket
+- Intended for offline Whisper / Vosk backends
 
 ## Notes
 
 - This MVP is optimized for microphone input from the browser.
 - Capturing system audio from meeting apps is more constrained in browsers and may require a desktop app approach.
-- If the browser or environment does not support `MediaRecorder` with the preferred MIME type, the app will fall back to a supported type when available.
-
-## Error Handling
-
-The app handles:
-
-- microphone permission denial
-- WebSocket connection failures
-- backend transcription errors
-- unsupported browser recording capabilities
-
-## Future Improvements
-
-- Save transcript history to a database
-- Export transcripts as TXT / PDF / DOCX
-- Speaker diarization
-- Multi-language switching
-- Authentication and meeting/session management
+- PCM mode is the recommended path for fully offline local speech-to-text backends.
